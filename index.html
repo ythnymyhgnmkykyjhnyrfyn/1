@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum 6-Node Pro Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Kanit', sans-serif; background-color: #030712; background-image: radial-gradient(at top left, #0b1a36 0%, #030712 70%); }
+        .font-code { font-family: 'Fira Code', monospace; }
+        .cyber-panel { background: rgba(10, 15, 30, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(6, 182, 212, 0.15); }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen p-4 md:p-8 flex items-center justify-center">
+
+    <div class="w-full max-w-5xl flex flex-col gap-6">
+        
+        <div class="cyber-panel p-6 rounded-2xl shadow-2xl relative border-t-4 border-t-cyan-500">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                    <h1 class="text-3xl font-black tracking-wider bg-gradient-to-r from-cyan-400 via-indigo-400 to-fuchsia-500 bg-clip-text text-transparent">QUANTUM MULTI-NODE SYSTEM</h1>
+                    <p class="text-slate-400 text-xs mt-1">แผงควบคุมและสั่งการระบบบอทอัตโนมัติ 6 นาย ทำงานบนคลาวด์ถาวร 24 ชม.</p>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span id="api-badge" class="text-xs font-code text-emerald-400 font-bold">API CONNECTED</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-900">
+                    <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block">สถานะหลักของเครื่อง</span>
+                    <span id="ui-status" class="text-base font-bold text-slate-400 mt-1 block">...</span>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-900">
+                    <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block">จำนวนรอบสะสมรวม (6 บอท)</span>
+                    <span id="ui-loops" class="text-xl font-bold font-code text-cyan-400 mt-0.5 block">0</span>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-900">
+                    <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest block">อัตราโครงข่าย</span>
+                    <span class="text-xl font-bold font-code text-fuchsia-400 mt-0.5 block">6 / 6 Nodes Online</span>
+                </div>
+            </div>
+
+            <button onclick="sendToggleCommand()" class="w-full bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-slate-950 font-black py-3.5 rounded-xl text-sm transition tracking-wider shadow-lg shadow-cyan-500/10">
+                🔄 ยิงคำสั่ง API : สลับเปิด / หยุดการทำงานของทุก Nodes พร้อมกัน
+            </button>
+        </div>
+
+        <div id="nodes-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            </div>
+
+        <div class="cyber-panel p-6 rounded-2xl flex flex-col">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">6-Nodes Real-time Stream Activity Log</h3>
+            <div id="ui-logs" class="bg-slate-950 p-4 rounded-xl font-code text-[11px] text-slate-400 h-[180px] overflow-y-auto space-y-1.5 leading-relaxed border border-slate-900">
+                กำลังต่อสายดึงข้อมูล Log ล่าสุด...
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ใช้คำสั่งสากลเพื่อให้ระบบชี้เป้าเข้าหาโฮสต์ตัวเองโดยอัตโนมัติแม้อยู่บน Render Cloud
+        const API_BASE = window.location.origin;
+
+        // ฟังก์ชันดึงสถานะปัจจุบันของระบบมาแสดงผลที่ UI หน้าบ้าน (GET Method)
+        async function updateDashboardData() {
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/status`);
+                const data = await res.json();
+
+                // 1. อัปเดตตัวแปรและป้ายสถานะภาพรวมหลักด้านบน
+                document.getElementById('ui-loops').innerText = data.automation_loops_completed.toLocaleString();
+                if(data.system_status === "ACTIVE") {
+                    document.getElementById('ui-status').innerText = "🟢 RUNNING ALL NODES";
+                    document.getElementById('ui-status').className = "text-base font-bold text-emerald-400 mt-1 block";
+                } else {
+                    document.getElementById('ui-status').innerText = "🔴 PAUSED ALL NODES";
+                    document.getElementById('ui-status').className = "text-base font-bold text-rose-400 mt-1 block";
+                }
+
+                // 2. เรนเดอร์สร้างการ์ดแสดงสถานะของบอททั้ง 6 นาย (6 Nodes Data Mapping)
+                document.getElementById('nodes-container').innerHTML = data.nodes.map(node => `
+                    <div class="bg-slate-950/70 border ${node.status === 'STABLE' ? 'border-slate-800 hover:border-cyan-500/40':'border-rose-950'} p-4 rounded-xl transition duration-200 shadow-xl">
+                        <div class="flex justify-between items-center mb-1">
+                            <h4 class="font-bold text-xs text-slate-400 font-code tracking-wide">${node.id} // ${node.name}</h4>
+                            <span class="text-[10px] px-2 py-0.5 rounded font-black font-code ${node.status === 'STABLE' ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-900':'bg-rose-950/50 text-rose-400 border border-rose-900'}">${node.status}</span>
+                        </div>
+                        <p class="text-sm font-medium text-slate-200 mt-1.5">${node.task}</p>
+                        <div class="grid grid-cols-2 gap-2 mt-4 pt-2 border-t border-slate-900 font-code text-[10px] text-slate-500">
+                            <div>SPEED: <span class="text-cyan-400 font-bold">${node.speed}</span></div>
+                            <div class="text-right">HEALTH: <span class="text-indigo-400 font-bold">${node.health}</span></div>
+                        </div>
+                    </div>
+                `).join('');
+
+                // 3. เรนเดอร์กล่องบันทึก Logs ข้อความกิจกรรมระบบหลังบ้าน
+                document.getElementById('ui-logs').innerHTML = data.logs.map(l => `
+                    <div class="border-b border-slate-900/30 pb-1">
+                        <span class="text-cyan-600 font-medium">[${l.timestamp}]</span> 
+                        <span class="${l.event.includes('⚠️') ? 'text-amber-400 font-bold': 'text-slate-300'}">${l.event}</span>
+                    </div>
+                `).join('');
+
+                document.getElementById('api-badge').innerText = "API CONNECTED";
+                document.getElementById('api-badge').className = "text-xs font-code text-emerald-400 font-bold";
+
+            } catch (error) {
+                // เผื่อเซิร์ฟเวอร์ขาดการติดต่อหรือหลับลึกชั่วคราว
+                document.getElementById('api-badge').innerText = "LINK OFFLINE";
+                document.getElementById('api-badge').className = "text-xs font-code text-rose-500 font-bold";
+                document.getElementById('ui-status').innerText = "❌ เซิร์ฟเวอร์ขาดการติดต่อ";
+                document.getElementById('ui-status').className = "text-base font-bold text-rose-500 mt-1 block";
+            }
+        }
+
+        // ฟังก์ชันสั่งกดยิงควบคุมแบบสลับสถานะเปิดปิดระบบบอททั้งหมด (POST Method)
+        async function sendToggleCommand() {
+            try {
+                await fetch(`${API_BASE}/api/v1/control`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: "TOGGLE_SYSTEM" })
+                });
+                updateDashboardData(); // รีเฟรชค่าบนหน้าจอทันทีเพื่อให้รับรู้คำสั่งไวที่สุดไม่ต้องรอวินาทีถัดไป
+            } catch (err) { console.error("API POST Failed"); }
+        }
+
+        // ระบบ Auto-polling ดึงความสดใหม่จากเซิร์ฟเวอร์หลังบ้านอัตโนมัติทุกๆ 2 วินาทีเสมือนโปรแกรม Real-time App
+        setInterval(updateDashboardData, 2000);
+        updateDashboardData(); // บังคับรันตั้งแต่วินาทีแรกที่เปิดเว็บทันที
+    </script>
+</body>
+</html>
